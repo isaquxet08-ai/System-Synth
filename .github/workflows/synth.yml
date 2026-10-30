@@ -10,6 +10,9 @@ jobs:
   synth:
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@main
         with:
@@ -24,43 +27,42 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs zstd wget unzip
 
-      # 1. 下载官方 GSI (1.7G，作为你的系统盘)
       - name: Download Base GSI
         run: |
           wget -q https://dl.google.com/developers/android/sc/images/gsi/aosp_arm64-exp-SPB1.210331.013-7333779-3227774b.zip -O gsi.zip
           unzip -q gsi.zip system.img
           mv system.img base_system.img
 
-      # 2. 下载官方模拟器包 (1.2G，从中提取 obedient 的 init)
       - name: Download Emulator Image
         run: |
           wget -q https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
           unzip -q emulator.zip system.img
-          # 转换为 raw 格式并提取 init
           simg2img system.img emulator_raw.img
           debugfs -R "dump /system/bin/init init_official" emulator_raw.img
 
-      # 3. 云端缝合 (给 GSI 换心)
-      - name: Splicing Init
+      - name: Splicing Init and BusyBox
         run: |
-          echo ">>> 开始换心手术..."
+          echo ">>> 解除系统盘封印..."
           debugfs -w -R "feature -shared_blocks" base_system.img
+          
+          echo ">>> 1. 换官方心脏..."
           debugfs -w -R "rm /system/bin/init" base_system.img
           debugfs -w -R "write init_official /system/bin/init" base_system.img
           debugfs -w -R "sif /system/bin/init mode 0100755" base_system.img
+          
+          echo ">>> 2. 缝合 BusyBox..."
+          debugfs -w -R "write busybox /system/bin/busybox" base_system.img
+          debugfs -w -R "sif /system/bin/busybox mode 0100755" base_system.img
 
-      # 4. 极限压缩 (1.7G 压成几百兆)
       - name: Compress Image
         run: |
-          echo ">>> 开始极限压缩..."
           zstd -19 -T0 base_system.img -o system_synth.img.zst
 
-      # 5. 发布到 Release 供本地下载
       - name: Upload to Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: synth-system-${{ github.run_number }}
-          name: Synth System Image
+          name: Synth System Image + BusyBox
           draft: false
           prerelease: true
           files: "system_synth.img.zst"
