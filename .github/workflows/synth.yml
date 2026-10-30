@@ -1,39 +1,52 @@
-name: Synth System Image
+name: Download and Compress System Image
+
 on:
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
-  synth:
+  download_and_pack:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: jlumbroso/free-disk-space@main
-      - run: sudo apt-get update -qq && sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs zstd wget unzip file
+      
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
+
+      - name: Install Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd wget unzip
+
       - name: Download Base GSI
         run: |
+          echo ">>> 正在下载 GSI 底包..."
           wget -q https://dl.google.com/developers/android/sc/images/gsi/aosp_arm64-exp-SPB1.210331.013-7333779-3227774b.zip -O gsi.zip
+          
+          echo ">>> 正在解压 system.img..."
           unzip -q gsi.zip system.img
           mv system.img base_system.img
-      - name: Download Emulator Image
+          
+      - name: Compress Image
         run: |
-          wget -q https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
-          unzip -q emulator.zip
-          EMU_IMG=$(find . -name "system.img" | head -n 1)
-          if file -b "$EMU_IMG" | grep -q "Android sparse"; then simg2img "$EMU_IMG" emulator_raw.img; else cp "$EMU_IMG" emulator_raw.img; fi
-          debugfs -R "dump /system/bin/init init_official" emulator_raw.img
-      - name: Splice
-        run: |
-          debugfs -w -R "feature -shared_blocks" base_system.img
-          debugfs -w -R "rm /system/bin/init" base_system.img
-          debugfs -w -R "write init_official /system/bin/init" base_system.img
-          debugfs -w -R "sif /system/bin/init mode 0100755" base_system.img
-          debugfs -w -R "write busybox /system/bin/busybox" base_system.img
-          debugfs -w -R "sif /system/bin/busybox mode 0100755" base_system.img
-      - name: Compress and Upload
-        run: |
-          zstd -10 -T0 base_system.img -o system_synth.img.zst
-          gh release create synth-${{ github.run_number }} system_synth.img.zst --title "Synth Build ${{ github.run_number }}" || true
-          gh release upload synth-${{ github.run_number }} system_synth.img.zst --clobber || true
+          echo ">>> 正在极限压缩..."
+          zstd -19 -T0 base_system.img -o pure_system.img.zst
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: pure-system-${{ github.run_number }}
+          name: Pure System Image
+          draft: false
+          prerelease: true
+          files: "pure_system.img.zst"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
