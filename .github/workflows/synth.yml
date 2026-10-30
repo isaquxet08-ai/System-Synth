@@ -1,4 +1,4 @@
-name: Download and Compress System Image
+name: Extract Official Init
 
 on:
   workflow_dispatch:
@@ -7,46 +7,43 @@ permissions:
   contents: write
 
 jobs:
-  download_and_pack:
+  extract_init:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: true
-          swap-storage: true
 
-      - name: Install Tools
+      - name: Download and Extract Init
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y zstd wget unzip
-
-      - name: Download Base GSI
-        run: |
-          echo ">>> 正在下载 GSI 底包..."
-          wget -q https://dl.google.com/developers/android/sc/images/gsi/aosp_arm64-exp-SPB1.210331.013-7333779-3227774b.zip -O gsi.zip
+          echo ">>> 下载官方模拟器包..."
+          wget -q --tries=3 https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
           
-          echo ">>> 正在解压 system.img..."
-          unzip -q gsi.zip system.img
-          mv system.img base_system.img
+          echo ">>> 只解压 ramdisk.img..."
+          unzip -q emulator.zip arm64-v8a/ramdisk.img
+          mv arm64-v8a/ramdisk.img ./
           
-      - name: Compress Image
-        run: |
-          echo ">>> 正在极限压缩..."
-          zstd -19 -T0 base_system.img -o pure_system.img.zst
+          echo ">>> 解包 lz4 并提取 init..."
+          sudo apt-get update -qq && sudo apt-get install -y lz4 cpio
+          lz4 -d ramdisk.img ramdisk.cpio
+          mkdir -p extracted && cd extracted
+          cpio -idmv < ../ramdisk.cpio
+          
+          cp init ../init_official
+          cd ..
+          chmod 755 init_official
 
+          # 🚨 核心防呆：如果 init_official 不存在或为空，直接报错退出！
+          if [ ! -s "init_official" ]; then
+            echo "❌ 提取失败，文件为空！"
+            exit 1
+          fi
+          
       - name: Upload to Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: pure-system-${{ github.run_number }}
-          name: Pure System Image
+          tag_name: official-init-${{ github.run_number }}
+          name: Official QEMU Init
           draft: false
           prerelease: true
-          files: "pure_system.img.zst"
+          files: "init_official"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
