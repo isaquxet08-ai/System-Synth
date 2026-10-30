@@ -14,14 +14,10 @@ jobs:
 
       - name: Download and Extract Init
         run: |
-          echo ">>> 下载官方模拟器包..."
           wget -q --tries=3 https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
-          
-          echo ">>> 只解压 ramdisk.img..."
           unzip -q emulator.zip arm64-v8a/ramdisk.img
           mv arm64-v8a/ramdisk.img ./
           
-          echo ">>> 解包 lz4 并提取 init..."
           sudo apt-get update -qq && sudo apt-get install -y lz4 cpio
           lz4 -d ramdisk.img ramdisk.cpio
           mkdir -p extracted && cd extracted
@@ -31,7 +27,7 @@ jobs:
           cd ..
           chmod 755 init_official
 
-          # 🚨 核心防呆：如果 init_official 不存在或为空，直接报错退出！
+          # 🚨 防呆机制：提取不到直接红叉报错
           if [ ! -s "init_official" ]; then
             echo "❌ 提取失败，文件为空！"
             exit 1
