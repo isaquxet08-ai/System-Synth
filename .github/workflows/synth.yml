@@ -1,89 +1,39 @@
 name: Synth System Image
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   synth:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: true
-          swap-storage: true
-
-      - name: Install Tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs zstd wget unzip
-
-      # 1. 下载官方 GSI 底包
+      - uses: actions/checkout@v4
+      - uses: jlumbroso/free-disk-space@main
+      - run: sudo apt-get update -qq && sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs zstd wget unzip file
       - name: Download Base GSI
         run: |
           wget -q https://dl.google.com/developers/android/sc/images/gsi/aosp_arm64-exp-SPB1.210331.013-7333779-3227774b.zip -O gsi.zip
           unzip -q gsi.zip system.img
           mv system.img base_system.img
-
-      # 2. 下载官方模拟器包 (提取 obedient 的 init)
       - name: Download Emulator Image
         run: |
           wget -q https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
           unzip -q emulator.zip
-          
-          # 🚨 核心修复：全局搜索 system.img 的绝对路径！
-          echo ">>> 正在全局搜索 system.img..."
-          find . -name "system.img"
-          EMULATOR_IMG=$(find . -name "system.img" | head -n 1)
-          
-          if [ -z "$EMULATOR_IMG" ]; then
-            echo "❌ 没找到 system.img，请检查包内容！"
-            exit 1
-          fi
-          
-          echo ">>> 找到镜像，路径为: $EMULATOR_IMG"
-          
-          # 转换成 raw 格式并提取 init
-          simg2img "$EMULATOR_IMG" emulator_raw.img
+          EMU_IMG=$(find . -name "system.img" | head -n 1)
+          if file -b "$EMU_IMG" | grep -q "Android sparse"; then simg2img "$EMU_IMG" emulator_raw.img; else cp "$EMU_IMG" emulator_raw.img; fi
           debugfs -R "dump /system/bin/init init_official" emulator_raw.img
-
-      # 3. 核心缝合：换心 + 塞入 BusyBox
-      - name: Splicing Init and BusyBox
+      - name: Splice
         run: |
-          echo ">>> 开始解除系统盘只读封印..."
           debugfs -w -R "feature -shared_blocks" base_system.img
-          
-          echo ">>> 1. 给系统盘换官方心脏..."
           debugfs -w -R "rm /system/bin/init" base_system.img
           debugfs -w -R "write init_official /system/bin/init" base_system.img
           debugfs -w -R "sif /system/bin/init mode 0100755" base_system.img
-          
-          echo ">>> 2. 把全功能 BusyBox 缝进系统盘..."
           debugfs -w -R "write busybox /system/bin/busybox" base_system.img
           debugfs -w -R "sif /system/bin/busybox mode 0100755" base_system.img
-
-      # 4. 极限压缩
-      - name: Compress Image
+      - name: Compress and Upload
         run: |
-          zstd -19 -T0 base_system.img -o system_synth.img.zst
-
-      # 5. 发到 Release
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: synth-system-${{ github.run_number }}
-          name: Synth System Image + BusyBox
-          draft: false
-          prerelease: true
-          files: "system_synth.img.zst"
+          zstd -10 -T0 base_system.img -o system_synth.img.zst
+          gh release create synth-${{ github.run_number }} system_synth.img.zst --title "Synth Build ${{ github.run_number }}" || true
+          gh release upload synth-${{ github.run_number }} system_synth.img.zst --clobber || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
