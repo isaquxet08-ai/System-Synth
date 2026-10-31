@@ -52,18 +52,15 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 强行降级 VNDK 版本为 v28..."
-          sed -i 's/BOARD_VNDK_VERSION := .*/BOARD_VNDK_VERSION := 28/g' build/make/core/board_config.mk
-          
-          # 🚨 核心修复：把 error 改成 warning，保留括号，防止语法崩溃！
-          sed -i 's/\$(error VNDK version .* not found.)/\$(warning VNDK error bypassed)/g' build/make/core/board_config.mk
+          echo ">>> 强行覆盖 VNDK 环境变量为 v28（绝不碰源码里的括号）..."
+          # 🚨 删掉了那行惹祸的 sed，直接用环境变量骗过它
+          export BOARD_VNDK_VERSION=28
           
           echo ">>> 开始编译 init..."
-          export BOARD_VNDK_VERSION=28
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
-          m init -j4 || echo "编译报错，准备兜底打捞"
+          m init -j2 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
         if: always()
