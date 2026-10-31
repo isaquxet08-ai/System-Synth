@@ -1,0 +1,73 @@
+name: Build KernelSU LKM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_ksu:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libelf-dev zlib1g-dev libssl-dev bc dwarves pahole bison flex
+
+      - name: Setup GKI Source & KSU
+        run: |
+          git clone --depth=1 https://android.googlesource.com/kernel/common -b android12-5.10 gki_kernel
+          wget -O gki_kernel/Module.symvers "https://github.com/isaquxet08-ai/Kernel-Builder-GKI-Susfs/releases/download/build-55-force/Module.symvers"
+          git clone --depth=1 https://github.com/tiann/KernelSU.git
+          
+          cp -r KernelSU/kernel gki_kernel/drivers/kernelsu
+          
+          # 🚨 核心修复：把 uapi 放到 KSU 自己的目录下
+          cp -r KernelSU/uapi gki_kernel/drivers/kernelsu/
+          
+          # 物理切除 preinit
+          sed -i '/preinit/d' gki_kernel/drivers/kernelsu/Makefile
+          
+          # 🚨 修复 Makefile：增加 ksu 根目录的 include 路径，并强制包含 ksu.h
+          echo "ccflags-y += -I\$(srctree)/drivers/kernelsu -include \$(srctree)/drivers/kernelsu/include/ksu.h" >> gki_kernel/drivers/kernelsu/Makefile
+
+      - name: Download Clang Toolchain
+        run: |
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r1/clang-r416183b.tar.gz
+          mkdir -p clang
+          tar -xzf clang-r416183b.tar.gz -C clang
+          echo "$PWD/clang/bin" >> $GITHUB_PATH
+
+      - name: Build Module
+        run: |
+          cd gki_kernel
+          make ARCH=arm64 gki_defconfig
+          make ARCH=arm64 olddefconfig
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CLANG_TRIPLE=aarch64-linux-gnu- modules_prepare
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CLANG_TRIPLE=aarch64-linux-gnu- security/selinux/
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CLANG_TRIPLE=aarch64-linux-gnu- CONFIG_KSU=m M=drivers/kernelsu modules
+          find . -name "*.ko" -exec cp {} ../ \;
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ksu-lkm-${{ github.run_number }}
+          name: KernelSU LKM Build ${{ github.run_number }}
+          draft: false
+          prerelease: true
+          files: "*.ko"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

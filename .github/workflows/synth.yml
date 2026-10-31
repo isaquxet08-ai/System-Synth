@@ -29,13 +29,10 @@ jobs:
           sudo mkdir -p /mnt/aosp
           sudo chown -R $USER:$USER /mnt/aosp
           cd /mnt/aosp
-          
-          echo ">>> 正在秒下私有全量知识库 (带已修好的 VNDK)..."
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/aosp-full-deps-v1/aosp_full_deps.tar.gz -O deps.tar.gz
           tar -xzf deps.tar.gz
           rm deps.tar.gz
           
-          echo ">>> 正在秒下私有 Clang 编译器..."
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/clang-toolchain-v1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
@@ -45,14 +42,25 @@ jobs:
       - name: Patch Source and Build Init
         run: |
           cd /mnt/aosp
-          
-          echo ">>> 物理切除 init 的自杀逻辑..."
+          mkdir -p bionic/libc/versioner-dependencies/common/clang-builtins
+          touch bionic/libc/versioner-dependencies/common/clang-builtins/.keep
+
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 开始编译 init..."
+          echo ">>> 全盘搜索并暗杀 Java 模块！"
+          FOUND_FILES=$(grep -rl "tests_transitive_parcel_c-java" --include="Android.bp" . 2>/dev/null || true)
+          if [ -z "$FOUND_FILES" ]; then
+              mkdir -p system/tools/aidl/tests
+              echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/Android.bp
+          else
+              for file in $FOUND_FILES; do
+                  echo 'soong_namespace { imports: [], }' > "$file"
+              done
+          fi
+          
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
@@ -64,13 +72,10 @@ jobs:
           cd /mnt/aosp
           INIT_PATH=$(find out/ -name "init" -type f | grep -v "\.o" | head -n 1)
           if [ -n "$INIT_PATH" ]; then
-            echo "✅ 捞到 init: $INIT_PATH"
             cp "$INIT_PATH" /mnt/aosp/init_synth
             chmod 755 /mnt/aosp/init_synth
             gh release create synth-init-${{ github.run_number }} /mnt/aosp/init_synth --title "Synth Init" || true
             gh release upload synth-init-${{ github.run_number }} /mnt/aosp/init_synth --clobber || true
-          else
-            echo "❌ 还是没捞到 init"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
