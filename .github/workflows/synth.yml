@@ -30,7 +30,7 @@ jobs:
           sudo chown -R $USER:$USER /mnt/aosp
           cd /mnt/aosp
           
-          echo ">>> 正在秒下私有全量知识库 (包含 v29)..."
+          echo ">>> 正在秒下私有全量知识库 (含所有VNDK)..."
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/aosp-full-deps-v1/aosp_full_deps.tar.gz -O deps.tar.gz
           tar -xzf deps.tar.gz
           rm deps.tar.gz
@@ -51,9 +51,9 @@ jobs:
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
-          
+
           echo ">>> 开始编译 init..."
-          # 🚨 这里不再强行 export 28 了，让系统自动读取真实的 v29
+          # 🚨 绝不强塞版本号，让系统自己去库里找！
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
