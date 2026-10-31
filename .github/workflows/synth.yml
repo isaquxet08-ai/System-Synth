@@ -55,25 +55,7 @@ jobs:
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
           echo ">>> 终极绞杀：清理 AIDL 模块！"
-          python3 - << 'PYEOF'
-import os, re
-files = [
-    "system/extras/profcollectd/libprofcollectd/Android.bp",
-    "system/extras/partition_tools/aidl/Android.bp",
-    "system/tools/aidl/Android.bp",
-    "system/tools/aidl/tests/stability_test/Android.bp",
-    "system/tools/aidl/tests/lazy_test/Android.bp",
-]
-for f in files:
-    if os.path.exists(f):
-        with open(f, 'r') as file:
-            content = file.read()
-        new_content = re.sub(r'aidl_interface\s*\{[^}]*\}', '', content, flags=re.DOTALL)
-        new_content = re.sub(r'aidl_interface_defaults\s*\{[^}]*\}', '', new_content, flags=re.DOTALL)
-        with open(f, 'w') as file:
-            file.write(new_content)
-        print(f"✅ Cleaned aidl_interface from: {f}")
-PYEOF
+          python3 -c "import re,os; [open(f, 'w').write(re.sub(r'aidl_interface(_defaults)?\s*\{[^}]*\}', '', open(f).read(), flags=re.DOTALL)) for f in ['system/extras/profcollectd/libprofcollectd/Android.bp', 'system/extras/partition_tools/aidl/Android.bp', 'system/tools/aidl/Android.bp', 'system/tools/aidl/tests/stability_test/Android.bp', 'system/tools/aidl/tests/lazy_test/Android.bp'] if os.path.exists(f)]"
 
           echo ">>> 全盘暗杀 Java 测试模块..."
           FOUND_FILES=$(grep -rl "tests_transitive_parcel" --include="Android.bp" . 2>/dev/null || true)
