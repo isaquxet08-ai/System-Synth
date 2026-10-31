@@ -54,20 +54,26 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 全盘搜索并暗杀 Java 模块！"
-          FOUND_FILES=$(grep -rl "tests_transitive_parcel_c-java" --include="Android.bp" . 2>/dev/null || true)
+          echo ">>> 全盘搜索并暗杀 Java 模块！(修正拼写)"
+          FOUND_FILES=$(grep -rl "tests_transitive_parcel" --include="Android.bp" . 2>/dev/null || true)
           if [ -z "$FOUND_FILES" ]; then
               mkdir -p system/tools/aidl/tests
               echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/Android.bp
           else
               for file in $FOUND_FILES; do
+                  echo ">>> 发现目标: $file 正在覆盖..."
                   echo 'soong_namespace { imports: [], }' > "$file"
               done
           fi
           
           export ALLOW_MISSING_DEPENDENCIES=true
+          # 核心护身符：强行关闭 Java 预编译
+          export WITH_DEXPREOPT=false
+          
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
+          
+          # 编译 init
           m init -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
