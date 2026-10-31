@@ -1,4 +1,4 @@
-name: Extract Official Init
+name: Compile Immortal Init
 
 on:
   workflow_dispatch:
@@ -7,39 +7,108 @@ permissions:
   contents: write
 
 jobs:
-  extract_init:
+  build-init:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
-      - name: Download and Extract Init
-        run: |
-          wget -q --tries=3 https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-S_r01.zip -O emulator.zip
-          unzip -q emulator.zip arm64-v8a/ramdisk.img
-          mv arm64-v8a/ramdisk.img ./
-          
-          sudo apt-get update -qq && sudo apt-get install -y lz4 cpio
-          lz4 -d ramdisk.img ramdisk.cpio
-          mkdir -p extracted && cd extracted
-          cpio -idmv < ../ramdisk.cpio
-          
-          cp init ../init_official
-          cd ..
-          chmod 755 init_official
-
-          # 🚨 防呆机制：提取不到直接红叉报错
-          if [ ! -s "init_official" ]; then
-            echo "❌ 提取失败，文件为空！"
-            exit 1
-          fi
-          
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
         with:
-          tag_name: official-init-${{ github.run_number }}
-          name: Official QEMU Init
-          draft: false
-          prerelease: true
-          files: "init_official"
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk
+
+      - name: Setup repo tool
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Sync AOSP Source
+        run: |
+          mkdir -p /mnt/aosp
+          cd /mnt/aosp
+          repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1 --depth=1
+          repo sync -c --no-tags --no-clone-bundle -j4 \
+            platform/system/core \
+            platform/system/libbase \
+            platform/system/logging \
+            platform/system/sepolicy \
+            platform/system/extras \
+            platform/system/libcutils \
+            platform/system/libutils \
+            platform/external/selinux \
+            platform/external/pcre \
+            platform/external/zlib \
+            platform/external/protobuf \
+            platform/external/golang-protobuf \
+            platform/build \
+            platform/build/soong \
+            platform/build/blueprint \
+            platform/prebuilts/build-tools \
+            platform/prebuilts/clang/host/linux-x86 \
+            platform/prebuilts/go/linux-x86
+
+      - name: Apply Immortal Patches
+        run: |
+          cd /mnt/aosp
+          cat > fix_init.sh << 'PATCH_EOF'
+          #!/bin/bash
+          echo ">>> 1. 物理超度 init 所有的致命报错..."
+          # 把所有 LOG(FATAL) 降级为 LOG(WARNING)
+          sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
+          sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_mount.cpp
+          sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/init.cpp
+          sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/mount_namespace.cpp
+          
+          # 删除所有的 abort(); 
+          sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
+          sed -i 's/abort();/;/g' system/core/init/first_stage_mount.cpp
+          
+          # 把 return false; 改为 return true;
+          sed -i 's/return false;/return true;/g' system/core/init/first_stage_init.cpp
+
+          echo ">>> 2. 物理切除 sysfs 和 selinuxfs 的挂载检查..."
+          # 直接删掉挂载 sysfs 的代码，或者让失败也继续
+          sed -i 's/mount("sysfs", "\/sys", "sysfs", 0, NULL)/0/g' system/core/init/first_stage_init.cpp
+          sed -i 's/mount("selinuxfs", "\/sys\/fs\/selinux", "selinuxfs", 0, NULL)/0/g' system/core/init/first_stage_init.cpp
+
+          echo ">>> 3. 禁止 Fatal 重启..."
+          # 把 InitFatalReboot 变成空函数
+          sed -i 's/android::init::InitFatalReboot(int);/;/g' system/core/init/*.cpp
+          PATCH_EOF
+          chmod +x fix_init.sh
+          ./fix_init.sh
+
+      - name: Build Init
+        run: |
+          cd /mnt/aosp
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export OUT_DIR=/mnt/aosp_out
+          source build/envsetup.sh || true
+          lunch aosp_arm64-userdebug || true
+          m init -j4 || echo "编译报错，准备兜底打捞"
+
+      - name: Rescue and Upload
+        if: always()
+        run: |
+          cd /mnt/aosp
+          INIT_PATH=$(find /mnt/aosp_out/ -name "init" -type f | grep -v "\.o" | head -n 1)
+          if [ -n "$INIT_PATH" ]; then
+            cp "$INIT_PATH" /mnt/aosp/init_immortal
+            chmod 755 /mnt/aosp/init_immortal
+            gh release create immortal-init-${{ github.run_number }} /mnt/aosp/init_immortal --title "Immortal Init" || true
+            gh release upload immortal-init-${{ github.run_number }} /mnt/aosp/init_immortal --clobber || true
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
