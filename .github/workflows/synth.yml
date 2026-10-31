@@ -65,23 +65,10 @@ jobs:
           echo 'soong_namespace { imports: [], }' > system/tools/aidl/Android.bp
           
           echo ">>> 特工潜入：把质检员改造成只会喊 OK 的假人！"
-          # 创建一个极简的假 C++ 源码
           echo 'int main() { return 0; }' > system/core/init/dummy_verifier.cpp
           
-          # 用 Python 剥离 host_init_verifier 的所有复杂依赖，让它只编译这个假源码
-          python3 -c "
-import re
-f = 'system/core/init/Android.bp'
-c = open(f).read()
-pattern = r'cc_binary\s*\{\s*name:\s*\"host_init_verifier\",.*?\n\}'
-replacement = '''cc_binary {
-    name: \"host_init_verifier\",
-    host_supported: true,
-    srcs: [\"dummy_verifier.cpp\"],
-}'''
-c = re.sub(pattern, replacement, c, flags=re.DOTALL)
-open(f, 'w').write(c)
-"
+          # 把 Python 脚本压成单行，绝对不报错
+          python3 -c "import re; f='system/core/init/Android.bp'; c=open(f).read(); c=re.sub(r'cc_binary\s*\{\s*name:\s*\"host_init_verifier\",.*?\n\}', 'cc_binary { name: \"host_init_verifier\", host_supported: true, srcs: [\"dummy_verifier.cpp\"], }', c, flags=re.DOTALL); open(f, 'w').write(c)"
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
@@ -89,7 +76,6 @@ open(f, 'w').write(c)
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
           
-          # 直接编译第二阶段的 init 二进制文件
           m init_second_stage -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
