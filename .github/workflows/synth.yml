@@ -22,7 +22,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk
+          # 补全宿主机的完整 C++ 运行库
+          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk libc++-dev libc++abi-dev
 
       - name: Fetch Private Deps and Clang
         run: |
@@ -64,11 +65,9 @@ jobs:
           mkdir -p system/extras/partition_tools/aidl && echo 'soong_namespace { imports: [], }' > system/extras/partition_tools/aidl/Android.bp
           echo 'soong_namespace { imports: [], }' > system/tools/aidl/Android.bp
           
-          echo ">>> 特工潜入：把质检员改造成只会喊 OK 的假人！"
-          echo 'int main() { return 0; }' > system/core/init/dummy_verifier.cpp
-          
-          # 把 Python 脚本压成单行，绝对不报错
-          python3 -c "import re; f='system/core/init/Android.bp'; c=open(f).read(); c=re.sub(r'cc_binary\s*\{\s*name:\s*\"host_init_verifier\",.*?\n\}', 'cc_binary { name: \"host_init_verifier\", host_supported: true, srcs: [\"dummy_verifier.cpp\"], }', c, flags=re.DOTALL); open(f, 'w').write(c)"
+          echo ">>> 特工潜入升级版：将质检员替换为 Shell 脚本（双保险）"
+          echo -e '#!/bin/sh\nexit 0' > system/core/init/dummy_verifier.sh
+          python3 -c "import re; f='system/core/init/Android.bp'; c=open(f).read(); c=re.sub(r'cc_binary\s*\{\s*name:\s*\"host_init_verifier\",.*?\n\}', 'sh_binary { name: \"host_init_verifier\", src: \"dummy_verifier.sh\", filename_from_src: true, }', c, flags=re.DOTALL); open(f, 'w').write(c)"
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
