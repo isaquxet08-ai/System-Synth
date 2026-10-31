@@ -45,6 +45,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
+          # 🚨 核心修复：补齐了 platform/external/starlark-go
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -63,6 +64,7 @@ jobs:
             platform/external/lz4 \
             platform/external/zstd \
             platform/external/boringssl \
+            platform/external/starlark-go \
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
@@ -79,15 +81,12 @@ jobs:
         run: |
           cd /mnt/aosp
           
-          echo ">>> 🚨 凭空捏造假 VNDK 目录（指鹿为马）..."
+          echo ">>> 🚨 凭空捏造假 VNDK 目录..."
           mkdir -p prebuilts/vndk/v28
           echo 'soong_namespace { imports: [] }' > prebuilts/vndk/v28/Android.bp
           
           export BOARD_VNDK_VERSION=28
 
-          rm -rf system/core
-          git clone --depth=1 https://github.com/isaquxet08-ai/platform_system_core.git system/core
-          
           echo ">>> 物理切除 init 的自杀逻辑..."
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
