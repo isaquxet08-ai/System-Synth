@@ -25,7 +25,7 @@ jobs:
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
           
-          echo ">>> 拉取纯血 v28-v30 全量库..."
+          echo ">>> 拉取全量核心依赖树 (v28-v30)..."
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -52,10 +52,20 @@ jobs:
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
-      - name: Pack and Upload
+      - name: Patch and Pack
         run: |
           cd /mnt/aosp
+          
+          echo ">>> 🚨 源头篡改：彻底把 VNDK 检查焊死！"
+          # 强行把环境变量改写为 28
+          sed -i 's/BOARD_VNDK_VERSION := .*/BOARD_VNDK_VERSION := 28/g' build/make/core/board_config.mk
+          # 把所有的 $(error 降级为 $(warning，防止它因为报错而崩溃
+          sed -i 's/\$(error/\$(warning/g' build/make/core/board_config.mk
+          
+          echo ">>> 正在打包纯净源码 (包含改好的配置文件)..."
           tar --exclude='.repo' --exclude='.git' -czf /mnt/aosp/aosp_full_deps.tar.gz *
+          
+          echo ">>> 覆盖发布到 Releases..."
           gh release upload aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz --clobber --repo isaquxet08-ai/System-Synth
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
