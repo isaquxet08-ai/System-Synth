@@ -39,7 +39,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 终极修正：去掉了不存在的独立仓库，防止 sync 报错
+          # 🚨 核心修复：加上了 platform/prebuilts/go/linux-x86
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -58,12 +58,12 @@ jobs:
             platform/external/lz4 \
             platform/external/zstd \
             platform/external/boringssl \
-            platform/prebuilts/build-tools
+            platform/prebuilts/build-tools \
+            platform/prebuilts/go/linux-x86
 
       - name: Fetch Google Clang Toolchain
         run: |
           cd /mnt/aosp
-          # 🚨 单独精准空投 Clang 编译器，避开拉取几十G的预编译库
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
@@ -73,11 +73,9 @@ jobs:
       - name: Patch Source
         run: |
           cd /mnt/aosp
-          echo ">>> 替换为你 Fork 修改过的 system/core..."
           rm -rf system/core
           git clone --depth=1 https://github.com/isaquxet08-ai/platform_system_core.git system/core
           
-          echo ">>> 无脑物理超度：删除检查宏和 Fatal 报错..."
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
