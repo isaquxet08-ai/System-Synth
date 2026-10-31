@@ -1,0 +1,84 @@
+name: Fetch and Publish Full AOSP Deps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-full-deps:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
+
+      - name: Setup Repo
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Sync Full Dependencies
+        run: |
+          sudo mkdir -p /mnt/aosp
+          sudo chown -R $USER:$USER /mnt/aosp
+          
+          cd /mnt/aosp
+          repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
+          
+          echo ">>> 正在拉取全量核心依赖树..."
+          repo sync -c --no-tags --no-clone-bundle -j4 \
+            platform/build \
+            platform/build/soong \
+            platform/build/blueprint \
+            platform/system/core \
+            platform/system/logging \
+            platform/system/libbase \
+            platform/system/sepolicy \
+            platform/system/extras \
+            platform/system/tools/aidl \
+            platform/bionic \
+            platform/external/selinux \
+            platform/external/protobuf \
+            platform/external/golang-protobuf \
+            platform/external/pcre \
+            platform/external/zlib \
+            platform/external/lz4 \
+            platform/external/zstd \
+            platform/external/boringssl \
+            platform/external/starlark-go \
+            platform/prebuilts/vndk/v28 \
+            platform/prebuilts/vndk/v31 \
+            platform/prebuilts/vndk/v32 \
+            platform/prebuilts/build-tools \
+            platform/prebuilts/go/linux-x86
+
+      - name: Pack and Upload
+        run: |
+          cd /mnt/aosp
+          echo ">>> 正在打包纯净源码（剔除 .repo 和 .git）..."
+          # 🚨 核心：剔除所有隐藏的 .repo 和 .git 目录，压缩整个源码树
+          tar --exclude='.repo' --exclude='.git' -czf /mnt/aosp/aosp_full_deps.tar.gz *
+          
+          echo ">>> 查看压缩包大小:"
+          ls -lh /mnt/aosp/aosp_full_deps.tar.gz
+          
+          echo ">>> 正在发布到 Releases..."
+          # 固定 Tag 为 aosp-full-deps-v1
+          gh release create aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz \
+            --title "AOSP Full Core Dependencies" \
+            --notes "Pre-synced AOSP source tree for ultra-fast CI." \
+            --repo isaquxet08-ai/System-Synth || \
+          gh release upload aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz \
+            --clobber \
+            --repo isaquxet08-ai/System-Synth
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
