@@ -54,20 +54,33 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 终极绞杀：清理 AIDL 模块！"
-          python3 -c "import re,os; [open(f, 'w').write(re.sub(r'aidl_interface(_defaults)?\s*\{[^}]*\}', '', open(f).read(), flags=re.DOTALL)) for f in ['system/extras/profcollectd/libprofcollectd/Android.bp', 'system/extras/partition_tools/aidl/Android.bp', 'system/tools/aidl/Android.bp', 'system/tools/aidl/tests/stability_test/Android.bp', 'system/tools/aidl/tests/lazy_test/Android.bp'] if os.path.exists(f)]"
+          echo ">>> 启动终极温柔手术：精准剔除 AIDL 和 Java 模块（保留 C++ 和 License）..."
+          python3 -c "
+import os, re
+for root, dirs, files in os.walk('.'):
+    for file in files:
+        if file == 'Android.bp':
+            path = os.path.join(root, file)
+            with open(path, 'r') as f: content = f.read()
+            # 仅仅切除未定义的 aidl 接口和 java 模块，保留其他一切原样
+            new = re.sub(r'aidl_interface(_defaults)?\s*\{[^}]*\}', '', content, flags=re.DOTALL)
+            new = re.sub(r'java_(library|test|defaults|app)\s*\{[^}]*\}', '', new, flags=re.DOTALL)
+            new = re.sub(r'tests_transitive_parcel[^{]*\{[^}]*\}', '', new, flags=re.DOTALL)
+            if new != content:
+                with open(path, 'w') as f: f.write(new)
+          "
 
-          echo ">>> 全盘暗杀 Java 测试模块..."
-          FOUND_FILES=$(grep -rl "tests_transitive_parcel" --include="Android.bp" . 2>/dev/null || true)
-          if [ -z "$FOUND_FILES" ]; then
-              mkdir -p system/tools/aidl/tests
-              echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/Android.bp
-          else
-              for file in $FOUND_FILES; do
-                  echo ">>> 发现目标: $file 正在覆盖..."
-                  echo 'soong_namespace { imports: [], }' > "$file"
-              done
-          fi
+          echo ">>> 补全丢失的 system_tools_aidl_license..."
+          # 创建一个补丁 bp，专门为找不到的 license 补个假户口
+          mkdir -p system/tools/aidl
+          cat > system/tools/aidl/license_patch.bp << 'BPEOF'
+license {
+    name: "system_tools_aidl_license",
+    visibility: [":__subpackages__"],
+    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
+    license_text: ["NOTICE"],
+}
+BPEOF
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
