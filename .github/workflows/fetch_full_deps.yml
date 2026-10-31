@@ -1,4 +1,4 @@
-name: Fetch and Publish Full AOSP Deps (No Clean)
+name: Fetch and Publish Full AOSP Deps
 
 on:
   workflow_dispatch:
@@ -10,7 +10,6 @@ jobs:
   fetch-full-deps:
     runs-on: ubuntu-22.04
     steps:
-      # 🚨 只有这三步，没有任何清灰和安装依赖的废话！
       - name: Setup Repo
         run: |
           mkdir -p ~/bin
@@ -26,7 +25,7 @@ jobs:
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
           
-          echo ">>> 正在拉取全量核心依赖树..."
+          echo ">>> 正在拉取全量核心依赖树（这次带上了 v29）..."
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -48,6 +47,7 @@ jobs:
             platform/external/boringssl \
             platform/external/starlark-go \
             platform/prebuilts/vndk/v28 \
+            platform/prebuilts/vndk/v29 \
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
@@ -57,13 +57,7 @@ jobs:
           echo ">>> 正在打包纯净源码（剔除 .repo 和 .git）..."
           tar --exclude='.repo' --exclude='.git' -czf /mnt/aosp/aosp_full_deps.tar.gz *
           
-          echo ">>> 正在发布到 Releases..."
-          gh release create aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz \
-            --title "AOSP Full Core Dependencies" \
-            --notes "Pre-synced AOSP source tree for ultra-fast CI." \
-            --repo isaquxet08-ai/System-Synth || \
-          gh release upload aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz \
-            --clobber \
-            --repo isaquxet08-ai/System-Synth
+          echo ">>> 正在覆盖发布到 Releases..."
+          gh release upload aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz --clobber --repo isaquxet08-ai/System-Synth
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
