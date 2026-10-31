@@ -1,4 +1,4 @@
-name: Fetch and Publish Full AOSP Deps
+name: Fetch and Publish Full AOSP Deps (No Clean)
 
 on:
   workflow_dispatch:
@@ -10,15 +10,7 @@ jobs:
   fetch-full-deps:
     runs-on: ubuntu-22.04
     steps:
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          tool-cache: true
-          swap-storage: true
-
+      # 🚨 只有这三步，没有任何清灰和安装依赖的废话！
       - name: Setup Repo
         run: |
           mkdir -p ~/bin
@@ -56,8 +48,6 @@ jobs:
             platform/external/boringssl \
             platform/external/starlark-go \
             platform/prebuilts/vndk/v28 \
-            platform/prebuilts/vndk/v31 \
-            platform/prebuilts/vndk/v32 \
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
@@ -65,14 +55,9 @@ jobs:
         run: |
           cd /mnt/aosp
           echo ">>> 正在打包纯净源码（剔除 .repo 和 .git）..."
-          # 🚨 核心：剔除所有隐藏的 .repo 和 .git 目录，压缩整个源码树
           tar --exclude='.repo' --exclude='.git' -czf /mnt/aosp/aosp_full_deps.tar.gz *
           
-          echo ">>> 查看压缩包大小:"
-          ls -lh /mnt/aosp/aosp_full_deps.tar.gz
-          
           echo ">>> 正在发布到 Releases..."
-          # 固定 Tag 为 aosp-full-deps-v1
           gh release create aosp-full-deps-v1 /mnt/aosp/aosp_full_deps.tar.gz \
             --title "AOSP Full Core Dependencies" \
             --notes "Pre-synced AOSP source tree for ultra-fast CI." \
