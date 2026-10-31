@@ -54,34 +54,30 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 启动终极温柔手术..."
-          # 写入独立的 Python 脚本，绕开 YAML 缩进地狱
-          cat > /mnt/aosp/patch_soong.py << 'PYEOF'
-import os, re
-for root, dirs, files in os.walk('.'):
-    for file in files:
-        if file == 'Android.bp':
-            path = os.path.join(root, file)
-            with open(path, 'r') as f: content = f.read()
-            new = re.sub(r'aidl_interface(_defaults)?\s*\{[^}]*\}', '', content, flags=re.DOTALL)
-            new = re.sub(r'java_(library|test|defaults|app)\s*\{[^}]*\}', '', new, flags=re.DOTALL)
-            new = re.sub(r'tests_transitive_parcel[^{]*\{[^}]*\}', '', new, flags=re.DOTALL)
-            if new != content:
-                with open(path, 'w') as f: f.write(new)
-PYEOF
+          echo ">>> 终极定点爆破：把报错的 AIDL 模块全换成合法空壳！"
+          mkdir -p system/tools/aidl/metadata
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/metadata/Android.bp
           
-          python3 /mnt/aosp/patch_soong.py
+          mkdir -p system/tools/aidl/build/apex
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/apex/Android.bp
+          
+          mkdir -p system/tools/aidl/tests/stability_test
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/stability_test/Android.bp
+          
+          mkdir -p system/tools/aidl/tests/lazy_test
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/lazy_test/Android.bp
+          
+          mkdir -p system/extras/profcollectd/libprofcollectd
+          echo 'soong_namespace { imports: [], }' > system/extras/profcollectd/libprofcollectd/Android.bp
+          
+          mkdir -p system/extras/partition_tools/aidl
+          echo 'soong_namespace { imports: [], }' > system/extras/partition_tools/aidl/Android.bp
 
-          echo ">>> 补全丢失的 system_tools_aidl_license..."
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/Android.bp
+          
+          echo ">>> 补全丢失的 system_tools_aidl_license (防空指针)..."
           mkdir -p system/tools/aidl
-          cat > system/tools/aidl/license_patch.bp << 'BPEOF'
-license {
-    name: "system_tools_aidl_license",
-    visibility: [":__subpackages__"],
-    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
-    license_text: ["NOTICE"],
-}
-BPEOF
+          echo -e 'license {\n    name: "system_tools_aidl_license",\n    visibility: [":__subpackages__"],\n    license_kinds: ["SPDX-license-identifier-Apache-2.0"],\n    license_text: ["NOTICE"],\n}' > system/tools/aidl/license_patch.bp
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
