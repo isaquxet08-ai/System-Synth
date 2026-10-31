@@ -39,7 +39,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：删掉了不存在的 libcutils 和 libprocessgroup
+          # 🚨 终极修正：去掉了不存在的独立仓库，防止 sync 报错
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -47,7 +47,6 @@ jobs:
             platform/system/core \
             platform/system/logging \
             platform/system/libbase \
-            platform/system/libutils \
             platform/system/sepolicy \
             platform/system/extras \
             platform/bionic \
@@ -64,6 +63,7 @@ jobs:
       - name: Fetch Google Clang Toolchain
         run: |
           cd /mnt/aosp
+          # 🚨 单独精准空投 Clang 编译器，避开拉取几十G的预编译库
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
