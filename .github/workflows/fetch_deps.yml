@@ -1,0 +1,67 @@
+name: Fetch and Publish AOSP Deps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-deps:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
+
+      - name: Setup Repo
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Sync Dependencies
+        run: |
+          sudo mkdir -p /mnt/aosp
+          sudo chown -R $USER:$USER /mnt/aosp
+          
+          cd /mnt/aosp
+          repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
+          
+          echo ">>> 正在拉取 VNDK、AIDL、Starlark 和 Go 环境..."
+          repo sync -c --no-tags --no-clone-bundle -j4 \
+            platform/prebuilts/vndk/v28 \
+            platform/prebuilts/vndk/v31 \
+            platform/prebuilts/vndk/v32 \
+            platform/system/tools/aidl \
+            platform/external/starlark-go \
+            platform/prebuilts/go/linux-x86
+
+      - name: Pack and Upload
+        run: |
+          cd /mnt/aosp
+          echo ">>> 正在打包依赖库..."
+          # 只打包需要的目录，抛弃烦人的 .repo 和 .git
+          tar -czf /mnt/aosp/aosp_deps.tar.gz \
+            prebuilts/vndk \
+            system/tools/aidl \
+            external/starlark-go \
+            prebuilts/go
+          
+          echo ">>> 正在发布到 Releases..."
+          # 固定 Tag 为 aosp-deps-v1
+          gh release create aosp-deps-v1 /mnt/aosp/aosp_deps.tar.gz \
+            --title "AOSP Core Dependencies (VNDK, AIDL, etc)" \
+            --notes "Cached dependencies to speed up CI builds." \
+            --repo isaquxet08-ai/System-Synth || \
+          gh release upload aosp-deps-v1 /mnt/aosp/aosp_deps.tar.gz \
+            --clobber \
+            --repo isaquxet08-ai/System-Synth
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
