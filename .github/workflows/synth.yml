@@ -30,7 +30,7 @@ jobs:
           sudo chown -R $USER:$USER /mnt/aosp
           cd /mnt/aosp
           
-          echo ">>> 正在秒下私有全量知识库 (含所有VNDK)..."
+          echo ">>> 正在秒下私有全量知识库 (带已修好的 VNDK)..."
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/aosp-full-deps-v1/aosp_full_deps.tar.gz -O deps.tar.gz
           tar -xzf deps.tar.gz
           rm deps.tar.gz
@@ -53,7 +53,6 @@ jobs:
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
           echo ">>> 开始编译 init..."
-          # 🚨 绝不强塞版本号，让系统自己去库里找！
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
