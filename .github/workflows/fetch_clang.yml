@@ -1,0 +1,31 @@
+name: Fetch and Publish Clang Toolchain
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-clang:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download Clang from Google
+        run: |
+          echo ">>> 正在从谷歌服务器拉取 2.4G 编译器..."
+          # 使用 -c 断点续传，防止网络抽风
+          wget -c --tries=5 --timeout=60 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r1/clang-r416183b.tar.gz -O clang-r416183b.tar.gz
+
+      - name: Publish to Release
+        run: |
+          echo ">>> 下载完成，正在发布到 Releases..."
+          # 🚨 固定 Tag 为 clang-toolchain-v1
+          gh release create clang-toolchain-v1 ./clang-r416183b.tar.gz \
+            --title "Google Clang r416183b (Fixed)" \
+            --notes "Cached toolchain for fast CI." \
+            --repo isaquxet08-ai/System-Synth || \
+          gh release upload clang-toolchain-v1 ./clang-r416183b.tar.gz \
+            --clobber \
+            --repo isaquxet08-ai/System-Synth
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
