@@ -30,7 +30,7 @@ jobs:
           sudo chown -R $USER:$USER /mnt/aosp
           cd /mnt/aosp
           
-          echo ">>> 正在秒下私有全量知识库..."
+          echo ">>> 正在秒下私有全量知识库 (包含 v29)..."
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/aosp-full-deps-v1/aosp_full_deps.tar.gz -O deps.tar.gz
           tar -xzf deps.tar.gz
           rm deps.tar.gz
@@ -51,16 +51,13 @@ jobs:
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
-
-          echo ">>> 强行覆盖 VNDK 环境变量为 v28（绝不碰源码里的括号）..."
-          # 🚨 删掉了那行惹祸的 sed，直接用环境变量骗过它
-          export BOARD_VNDK_VERSION=28
           
           echo ">>> 开始编译 init..."
+          # 🚨 这里不再强行 export 28 了，让系统自动读取真实的 v29
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
-          m init -j2 || echo "编译报错，准备兜底打捞"
+          m init -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
         if: always()
