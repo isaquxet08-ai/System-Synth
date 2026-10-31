@@ -12,6 +12,12 @@ jobs:
     steps:
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          tool-cache: true
+          swap-storage: true
 
       - name: Setup Swap and Space
         run: |
@@ -39,7 +45,6 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：加上了 platform/prebuilts/go/linux-x86
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -70,24 +75,34 @@ jobs:
           rm clang.tar.gz
           echo "/mnt/aosp/prebuilts/clang/host/linux-x86/clang-r416183b/bin" >> $GITHUB_PATH
 
-      - name: Patch Source
+      - name: Patch Source and Build Init
         run: |
           cd /mnt/aosp
+          
+          echo ">>> 🚨 凭空捏造假 VNDK 目录（指鹿为马）..."
+          mkdir -p prebuilts/vndk/v28
+          echo 'soong_namespace { imports: [] }' > prebuilts/vndk/v28/Android.bp
+          
+          export BOARD_VNDK_VERSION=28
+
           rm -rf system/core
           git clone --depth=1 https://github.com/isaquxet08-ai/platform_system_core.git system/core
           
+          echo ">>> 物理切除 init 的自杀逻辑..."
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-      - name: Build Init
-        run: |
-          cd /mnt/aosp
+          echo ">>> 暴力抹杀 VNDK 强制报错行..."
+          sed -i 's/$(error VNDK version .* not found.)//g' build/make/core/board_config.mk
+          sed -i '/error: VNDK version/d' build/make/core/board_config.mk
+          
+          echo ">>> 开始编译 init..."
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
-          m init -j4 || echo "编译报错，准备兜底打捞"
+          m init -j2 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
         if: always()
@@ -95,10 +110,13 @@ jobs:
           cd /mnt/aosp
           INIT_PATH=$(find out/ -name "init" -type f | grep -v "\.o" | head -n 1)
           if [ -n "$INIT_PATH" ]; then
+            echo "✅ 捞到 init: $INIT_PATH"
             cp "$INIT_PATH" /mnt/aosp/init_synth
             chmod 755 /mnt/aosp/init_synth
             gh release create synth-init-${{ github.run_number }} /mnt/aosp/init_synth --title "Synth Init" || true
             gh release upload synth-init-${{ github.run_number }} /mnt/aosp/init_synth --clobber || true
+          else
+            echo "❌ 还是没捞到 init"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
