@@ -42,9 +42,13 @@ jobs:
       - name: Patch Source and Build Init
         run: |
           cd /mnt/aosp
+          
+          echo ">>> 强拆冲突文件并重建目录..."
+          rm -rf bionic/libc/versioner-dependencies/common/clang-builtins
           mkdir -p bionic/libc/versioner-dependencies/common/clang-builtins
           touch bionic/libc/versioner-dependencies/common/clang-builtins/.keep
 
+          echo ">>> 物理切除 init 的自杀逻辑..."
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
