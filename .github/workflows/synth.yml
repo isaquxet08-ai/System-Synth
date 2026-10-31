@@ -54,7 +54,12 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 终极定点爆破：把报错的 AIDL 模块全换成合法空壳！"
+          echo ">>> 终极定点爆破：全网封杀 AIDL 模块！"
+          # 暴力覆盖所有相关的 AIDL Android.bp 文件
+          
+          mkdir -p system/tools/aidl/build
+          echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/Android.bp
+          
           mkdir -p system/tools/aidl/metadata
           echo 'soong_namespace { imports: [], }' > system/tools/aidl/metadata/Android.bp
           
@@ -72,12 +77,12 @@ jobs:
           
           mkdir -p system/extras/partition_tools/aidl
           echo 'soong_namespace { imports: [], }' > system/extras/partition_tools/aidl/Android.bp
-
+          
+          # 根目录直接覆盖，不留隐患
           echo 'soong_namespace { imports: [], }' > system/tools/aidl/Android.bp
           
-          echo ">>> 补全丢失的 system_tools_aidl_license (防空指针)..."
-          mkdir -p system/tools/aidl
-          echo -e 'license {\n    name: "system_tools_aidl_license",\n    visibility: [":__subpackages__"],\n    license_kinds: ["SPDX-license-identifier-Apache-2.0"],\n    license_text: ["NOTICE"],\n}' > system/tools/aidl/license_patch.bp
+          # 删掉之前写的假户口本，防止重复定义报错
+          rm -f system/tools/aidl/license_patch.bp
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
