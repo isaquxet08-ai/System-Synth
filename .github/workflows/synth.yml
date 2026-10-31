@@ -54,35 +54,19 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 终极定点爆破：全网封杀 AIDL 模块！"
-          # 暴力覆盖所有相关的 AIDL Android.bp 文件
-          
-          mkdir -p system/tools/aidl/build
-          echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/Android.bp
-          
-          mkdir -p system/tools/aidl/metadata
-          echo 'soong_namespace { imports: [], }' > system/tools/aidl/metadata/Android.bp
-          
-          mkdir -p system/tools/aidl/build/apex
-          echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/apex/Android.bp
-          
-          mkdir -p system/tools/aidl/tests/stability_test
-          echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/stability_test/Android.bp
-          
-          mkdir -p system/tools/aidl/tests/lazy_test
-          echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/lazy_test/Android.bp
-          
-          mkdir -p system/extras/profcollectd/libprofcollectd
-          echo 'soong_namespace { imports: [], }' > system/extras/profcollectd/libprofcollectd/Android.bp
-          
-          mkdir -p system/extras/partition_tools/aidl
-          echo 'soong_namespace { imports: [], }' > system/extras/partition_tools/aidl/Android.bp
-          
-          # 根目录直接覆盖，不留隐患
+          echo ">>> 终极定点爆破：封杀 AIDL 模块！"
+          mkdir -p system/tools/aidl/build && echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/Android.bp
+          mkdir -p system/tools/aidl/metadata && echo 'soong_namespace { imports: [], }' > system/tools/aidl/metadata/Android.bp
+          mkdir -p system/tools/aidl/build/apex && echo 'soong_namespace { imports: [], }' > system/tools/aidl/build/apex/Android.bp
+          mkdir -p system/tools/aidl/tests/stability_test && echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/stability_test/Android.bp
+          mkdir -p system/tools/aidl/tests/lazy_test && echo 'soong_namespace { imports: [], }' > system/tools/aidl/tests/lazy_test/Android.bp
+          mkdir -p system/extras/profcollectd/libprofcollectd && echo 'soong_namespace { imports: [], }' > system/extras/profcollectd/libprofcollectd/Android.bp
+          mkdir -p system/extras/partition_tools/aidl && echo 'soong_namespace { imports: [], }' > system/extras/partition_tools/aidl/Android.bp
           echo 'soong_namespace { imports: [], }' > system/tools/aidl/Android.bp
           
-          # 删掉之前写的假户口本，防止重复定义报错
-          rm -f system/tools/aidl/license_patch.bp
+          echo ">>> 斩杀无用的宿主机语法检查工具 host_init_verifier！"
+          # 用 Python 把 host_init_verifier 这个模块从 Android.bp 里直接剔除
+          python3 -c "import re; f='system/core/init/Android.bp'; c=open(f).read(); c=re.sub(r'cc_binary \{\s*name: \"host_init_verifier\".*?\n\}', '', c, flags=re.DOTALL); open(f, 'w').write(c)"
           
           export ALLOW_MISSING_DEPENDENCIES=true
           export WITH_DEXPREOPT=false
@@ -90,7 +74,8 @@ jobs:
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
           
-          m init -j4 || echo "编译报错，准备兜底打捞"
+          # 直接编译第二阶段的 init 二进制文件
+          m init_second_stage -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
         if: always()
