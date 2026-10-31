@@ -54,7 +54,28 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 全盘搜索并暗杀 Java 模块！(修正拼写)"
+          echo ">>> 终极绞杀：清理 AIDL 模块！"
+          python3 - << 'PYEOF'
+import os, re
+files = [
+    "system/extras/profcollectd/libprofcollectd/Android.bp",
+    "system/extras/partition_tools/aidl/Android.bp",
+    "system/tools/aidl/Android.bp",
+    "system/tools/aidl/tests/stability_test/Android.bp",
+    "system/tools/aidl/tests/lazy_test/Android.bp",
+]
+for f in files:
+    if os.path.exists(f):
+        with open(f, 'r') as file:
+            content = file.read()
+        new_content = re.sub(r'aidl_interface\s*\{[^}]*\}', '', content, flags=re.DOTALL)
+        new_content = re.sub(r'aidl_interface_defaults\s*\{[^}]*\}', '', new_content, flags=re.DOTALL)
+        with open(f, 'w') as file:
+            file.write(new_content)
+        print(f"✅ Cleaned aidl_interface from: {f}")
+PYEOF
+
+          echo ">>> 全盘暗杀 Java 测试模块..."
           FOUND_FILES=$(grep -rl "tests_transitive_parcel" --include="Android.bp" . 2>/dev/null || true)
           if [ -z "$FOUND_FILES" ]; then
               mkdir -p system/tools/aidl/tests
@@ -67,13 +88,11 @@ jobs:
           fi
           
           export ALLOW_MISSING_DEPENDENCIES=true
-          # 核心护身符：强行关闭 Java 预编译
           export WITH_DEXPREOPT=false
           
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
           
-          # 编译 init
           m init -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
