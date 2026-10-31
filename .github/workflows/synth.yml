@@ -17,7 +17,8 @@ jobs:
         run: |
           sudo fallocate -l 16G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=16384
           sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
-          sudo mkdir -p /mnt/aosp && sudo chown -R $USER:$USER /mnt/aosp
+          sudo mkdir -p /mnt/aosp
+          sudo chown -R $USER:$USER /mnt/aosp
 
       - name: Install Dependencies
         run: |
@@ -33,8 +34,12 @@ jobs:
 
       - name: Sync Full Tree
         run: |
+          sudo mkdir -p /mnt/aosp
+          sudo chown -R $USER:$USER /mnt/aosp
+          
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
+          # 🚨 核心修复：删掉了不存在的 libcutils 和 libprocessgroup
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -42,9 +47,7 @@ jobs:
             platform/system/core \
             platform/system/logging \
             platform/system/libbase \
-            platform/system/libcutils \
             platform/system/libutils \
-            platform/system/libprocessgroup \
             platform/system/sepolicy \
             platform/system/extras \
             platform/bionic \
@@ -75,10 +78,8 @@ jobs:
           git clone --depth=1 https://github.com/isaquxet08-ai/platform_system_core.git system/core
           
           echo ">>> 无脑物理超度：删除检查宏和 Fatal 报错..."
-          # 🚨 核心手术：把 CHECKCALL 宏从 sysfs 和 selinuxfs 的挂载中剥离出来
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
-          # 把 Fatal 降级成 Warning，并且把 abort 删掉
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
