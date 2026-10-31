@@ -45,7 +45,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：加入了 platform/system/tools/aidl
+          # 🚨 终极完全体：包含真实 VNDK (v28/v31/v32) 和 tools/aidl
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -66,6 +66,9 @@ jobs:
             platform/external/zstd \
             platform/external/boringssl \
             platform/external/starlark-go \
+            platform/prebuilts/vndk/v28 \
+            platform/prebuilts/vndk/v31 \
+            platform/prebuilts/vndk/v32 \
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
@@ -73,7 +76,7 @@ jobs:
         run: |
           cd /mnt/aosp
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
-          # 🚨 已经替换为你自己的私有专属链接！秒下！
+          # 🚨 使用私有专属高速直链，告别龟速下载
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/clang-toolchain-v1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
           rm clang.tar.gz
@@ -83,21 +86,11 @@ jobs:
         run: |
           cd /mnt/aosp
           
-          echo ">>> 🚨 凭空捏造假 VNDK 目录..."
-          mkdir -p prebuilts/vndk/v28
-          echo 'soong_namespace { imports: [] }' > prebuilts/vndk/v28/Android.bp
-          
-          export BOARD_VNDK_VERSION=28
-
           echo ">>> 物理切除 init 的自杀逻辑..."
           sed -i 's/CHECKCALL(mount("sysfs"/mount("sysfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/CHECKCALL(mount("selinuxfs"/mount("selinuxfs"/g' system/core/init/first_stage_init.cpp
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
-
-          echo ">>> 暴力抹杀 VNDK 强制报错行..."
-          sed -i 's/$(error VNDK version .* not found.)//g' build/make/core/board_config.mk
-          sed -i '/error: VNDK version/d' build/make/core/board_config.mk
           
           echo ">>> 开始编译 init..."
           export ALLOW_MISSING_DEPENDENCIES=true
