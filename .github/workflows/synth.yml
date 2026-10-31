@@ -45,7 +45,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：加入了 tools/aidl
+          # 🚨 核心修复：加入了 platform/system/tools/aidl
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -69,11 +69,12 @@ jobs:
             platform/prebuilts/build-tools \
             platform/prebuilts/go/linux-x86
 
-      - name: Fetch Google Clang Toolchain
+      - name: Fetch Google Clang Toolchain (Private Cache)
         run: |
           cd /mnt/aosp
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-12.0.0_r1/clang-r416183b.tar.gz -O clang.tar.gz
+          # 🚨 已经替换为你自己的私有专属链接！秒下！
+          wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/clang-toolchain-v1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
           rm clang.tar.gz
           echo "/mnt/aosp/prebuilts/clang/host/linux-x86/clang-r416183b/bin" >> $GITHUB_PATH
