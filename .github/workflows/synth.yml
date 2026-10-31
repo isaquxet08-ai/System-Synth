@@ -1,4 +1,4 @@
-name: Build Synth Init
+name: Build Synth Init (Private Cache)
 
 on:
   workflow_dispatch:
@@ -19,60 +19,23 @@ jobs:
           tool-cache: true
           swap-storage: true
 
-      - name: Setup Swap and Space
-        run: |
-          sudo fallocate -l 16G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=16384
-          sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
-          sudo mkdir -p /mnt/aosp
-          sudo chown -R $USER:$USER /mnt/aosp
-
       - name: Install Dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk
 
-      - name: Setup Repo
-        run: |
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-
-      - name: Sync Full Tree
+      - name: Fetch Private Deps and Clang
         run: |
           sudo mkdir -p /mnt/aosp
           sudo chown -R $USER:$USER /mnt/aosp
+          cd /mnt/aosp
           
-          cd /mnt/aosp
-          repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：去掉 v31 和 v32，只保留确认存在的 v28
-          repo sync -c --no-tags --no-clone-bundle -j4 \
-            platform/build \
-            platform/build/soong \
-            platform/build/blueprint \
-            platform/system/core \
-            platform/system/logging \
-            platform/system/libbase \
-            platform/system/sepolicy \
-            platform/system/extras \
-            platform/system/tools/aidl \
-            platform/bionic \
-            platform/external/selinux \
-            platform/external/protobuf \
-            platform/external/golang-protobuf \
-            platform/external/pcre \
-            platform/external/zlib \
-            platform/external/lz4 \
-            platform/external/zstd \
-            platform/external/boringssl \
-            platform/external/starlark-go \
-            platform/prebuilts/vndk/v28 \
-            platform/prebuilts/build-tools \
-            platform/prebuilts/go/linux-x86
-
-      - name: Fetch Google Clang Toolchain (Private Cache)
-        run: |
-          cd /mnt/aosp
+          echo ">>> 正在秒下私有全量知识库..."
+          wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/aosp-full-deps-v1/aosp_full_deps.tar.gz -O deps.tar.gz
+          tar -xzf deps.tar.gz
+          rm deps.tar.gz
+          
+          echo ">>> 正在秒下私有 Clang 编译器..."
           mkdir -p prebuilts/clang/host/linux-x86/clang-r416183b
           wget -q https://github.com/isaquxet08-ai/System-Synth/releases/download/clang-toolchain-v1/clang-r416183b.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz -C prebuilts/clang/host/linux-x86/clang-r416183b
@@ -89,17 +52,15 @@ jobs:
           sed -i 's/LOG(FATAL)/LOG(WARNING)/g' system/core/init/first_stage_init.cpp
           sed -i 's/abort();/;/g' system/core/init/first_stage_init.cpp
 
-          echo ">>> 强行降级 VNDK 版本要求为 v28..."
-          # 🚨 强制将 VNDK 版本写死成 v28，骗过构建系统
+          echo ">>> 强行降级 VNDK 版本为 v28..."
           sed -i 's/BOARD_VNDK_VERSION := .*/BOARD_VNDK_VERSION := 28/g' build/make/core/board_config.mk
-          sed -i 's/$(error VNDK version .* not found.)//g' build/make/core/board_config.mk
           
           echo ">>> 开始编译 init..."
           export BOARD_VNDK_VERSION=28
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh || true
           lunch aosp_arm64-userdebug || true
-          m init -j2 || echo "编译报错，准备兜底打捞"
+          m init -j4 || echo "编译报错，准备兜底打捞"
 
       - name: Rescue and Upload
         if: always()
