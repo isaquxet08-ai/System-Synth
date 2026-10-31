@@ -45,7 +45,7 @@ jobs:
           
           cd /mnt/aosp
           repo init -u https://android.googlesource.com/platform/manifest -b android-12.0.0_r1
-          # 🚨 核心修复：补齐了 platform/external/starlark-go
+          # 🚨 核心修复：加入了 tools/aidl
           repo sync -c --no-tags --no-clone-bundle -j4 \
             platform/build \
             platform/build/soong \
@@ -55,6 +55,7 @@ jobs:
             platform/system/libbase \
             platform/system/sepolicy \
             platform/system/extras \
+            platform/system/tools/aidl \
             platform/bionic \
             platform/external/selinux \
             platform/external/protobuf \
